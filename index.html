@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <title>BMS Architecture — EVO vHIL</title>
+
+  <meta name="author" content="Vishal Bagade">
+  <meta name="description" content="Battery Management System architecture for the EVO vHIL platform — energy control, safety enforcement, and state orchestration.">
+  <meta name="robots" content="index, follow">
+
+  <meta property="og:title" content="BMS Architecture — EVO vHIL" />
+  <meta property="og:description" content="Safety-critical BMS architecture — energy control, fault detection, and state orchestration. ISO 26262 informed design." />
+  <meta property="og:url" content="https://bms.evovhil.com/" />
+  <meta property="og:type" content="article" />
+  <meta property="og:image" content="https://evovhil.com/og.png" />
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://evovhil.com/og.png">
+
+  <link rel="canonical" href="https://bms.evovhil.com/" />
+  <link rel="icon" href="https://evovhil.com/favicon.ico">
+  <link rel="icon" type="image/png" sizes="32x32" href="https://evovhil.com/favicon.png">
+  <link rel="apple-touch-icon" href="https://evovhil.com/apple-touch-icon.png">
+
+  <link rel="preload" href="https://evovhil.com/style.css" as="style">
+  <link rel="stylesheet" href="https://evovhil.com/style.css" />
+
+  <style>
+    /* ── GREEN ACCENT OVERRIDE ──────────────────────────── */
+    :root {
+      --cyan:      #00e87a;
+      --cyan-dim:  rgba(0, 232, 122, 0.08);
+      --border:    rgba(0, 232, 122, 0.15);
+      --border-hi: rgba(0, 232, 122, 0.45);
+      --glow:      0 0 18px rgba(0, 232, 122, 0.35), 0 0 60px rgba(0, 232, 122, 0.10);
+    }
+    body::before {
+      background-image:
+        linear-gradient(rgba(0, 232, 122, 0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 232, 122, 0.025) 1px, transparent 1px);
+      background-size: 40px 40px;
+    }
+    body::after {
+      background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+    }
+    .scanline {
+      background: linear-gradient(180deg, transparent, rgba(0, 232, 122, 0.04), transparent);
+    }
+    .hero::before {
+      background: radial-gradient(ellipse at 30% 40%, rgba(0, 232, 122, 0.07) 0%, transparent 70%);
+    }
+
+    /* ── DOCUMENT HEADER ────────────────────────────────── */
+    .doc-header {
+      border-bottom: 1px solid var(--border);
+      padding: 1.25rem 0;
+      position: relative;
+      z-index: 1;
+    }
+    .doc-header-inner {
+      max-width: 1160px;
+      margin: 0 auto;
+      padding: 0 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+    .doc-id-block {
+      display: flex;
+      align-items: center;
+      gap: 1.25rem;
+    }
+    .doc-logo {
+      font-family: var(--head);
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--cyan);
+      letter-spacing: 0.1em;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .doc-logo .dot {
+      width: 7px; height: 7px;
+      background: var(--cyan);
+      border-radius: 50%;
+      box-shadow: var(--glow);
+    }
+    .doc-sep { width: 1px; height: 22px; background: var(--border); }
+    .doc-ref {
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      letter-spacing: 0.1em;
+      color: var(--text-dim);
+      text-transform: uppercase;
+    }
+    .doc-ref span { color: var(--cyan); }
+    .doc-meta-right {
+      display: flex;
+      align-items: center;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+    }
+    .doc-meta-item {
+      font-family: var(--mono);
+      font-size: 0.67rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+    }
+    .doc-meta-item span { color: var(--text); }
+
+    /* ── LED STATUS ─────────────────────────────────────── */
+    .terminal-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.6rem;
+      font-family: var(--mono);
+      font-size: 0.78rem;
+      letter-spacing: 0.1em;
+      color: var(--cyan);
+      background: var(--cyan-dim);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 0.45rem 1rem;
+      margin-bottom: 2.5rem;
+    }
+    .terminal-status .led {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--cyan);
+      box-shadow: var(--glow);
+      animation: led-pulse 2s ease-in-out infinite;
+      flex-shrink: 0;
+    }
+    @keyframes led-pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.3; }
+    }
+
+    /* ── ASIL BADGES ────────────────────────────────────── */
+    .asil {
+      display: inline-flex;
+      align-items: center;
+      font-family: var(--mono);
+      font-size: 0.68rem;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      padding: 0.22rem 0.6rem;
+      border-radius: 3px;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+    .asil-d {
+      background: rgba(239,68,68,0.12);
+      border: 1px solid rgba(239,68,68,0.4);
+      color: #ef4444;
+    }
+   
+
+    /* ── SAFETY GOAL CARDS ──────────────────────────────── */
+    .sg-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.25rem 1.5rem;
+      position: relative;
+      transition: border-color 0.25s;
+    }
+    .sg-card::before {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0; height: 2px;
+      background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+      opacity: 0; border-radius: var(--radius) var(--radius) 0 0;
+      transition: opacity 0.25s;
+    }
+    .sg-card:hover { border-color: var(--border-hi); }
+    .sg-card:hover::before { opacity: 1; }
+    .sg-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 0.65rem;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+    .sg-id {
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      letter-spacing: 0.1em;
+      color: var(--text-dim);
+      text-transform: uppercase;
+    }
+    .sg-title {
+      font-family: var(--head);
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: var(--text-hi);
+      margin-bottom: 0.35rem;
+    }
+    .sg-desc {
+      font-size: 0.88rem;
+      color: var(--text);
+      line-height: 1.65;
+    }
+    .sg-grid {
+      display: grid;
+      gap: 0.85rem;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    }
+
+    /* ── TOPIC LIST ─────────────────────────────────────── */
+    .topic-list { list-style: none; margin-top: 1.25rem; }
+    .topic-list li {
+      display: flex;
+      align-items: flex-start;
+      gap: 1rem;
+      padding: 0.85rem 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.92rem;
+      font-family: var(--mono);
+      color: var(--text);
+      transition: color 0.2s;
+    }
+    .topic-list li:last-child { border-bottom: none; }
+    .topic-list li::before {
+      content: '//';
+      color: var(--cyan);
+      flex-shrink: 0;
+      font-size: 0.75rem;
+      margin-top: 0.1rem;
+      opacity: 0.6;
+    }
+    .topic-list li:hover { color: var(--text-hi); }
+
+    /* ── SIG LINE ───────────────────────────────────────── */
+    .sig-line {
+      font-family: var(--body);
+      font-style: italic;
+      font-size: 1.1rem;
+      color: var(--text-hi);
+      border-left: 3px solid var(--cyan);
+      padding-left: 1.25rem;
+      margin: 2.5rem 0;
+      max-width: 52ch;
+    }
+
+    /* ── PROGRESS ───────────────────────────────────────── */
+    .design-progress {
+      padding: 1.5rem;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+    }
+    .progress-label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      letter-spacing: 0.1em;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      margin-bottom: 0.65rem;
+    }
+    .progress-label span { color: var(--cyan); }
+    .progress-bar-wrap {
+      height: 3px;
+      background: var(--border);
+      border-radius: 100px;
+      overflow: hidden;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      width: 38%;
+      background: linear-gradient(90deg, var(--cyan), rgba(0,232,122,0.35));
+      border-radius: 100px;
+      box-shadow: var(--glow);
+      animation: pglow 3s ease-in-out infinite;
+    }
+    @keyframes pglow {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.55; }
+    }
+
+    /* ── LAYER ROW ──────────────────────────────────────── */
+    .layer-row {
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+      flex-wrap: wrap;
+      margin-top: 2rem;
+    }
+
+    /* ── PAGE FOOTER ─────────────────────── */
+    .page-footer {
+      border-top: 1px solid var(--border);
+      padding: 2.5rem 0;
+      position: relative;
+      z-index: 1;
+    }
+    .page-footer-inner {
+      max-width: 1160px;
+      margin: 0 auto;
+      padding: 0 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 1.25rem;
+    }
+    .footer-brand {
+      font-family: var(--head);
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: var(--cyan);
+      letter-spacing: 0.1em;
+    }
+    .footer-meta {
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      margin-top: 0.3rem;
+    }
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-family: var(--mono);
+      font-size: 0.78rem;
+      letter-spacing: 0.08em;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 0.5rem 1.1rem;
+      transition: all 0.2s;
+    }
+    .back-link:hover {
+      color: var(--cyan);
+      border-color: var(--border-hi);
+      background: var(--cyan-dim);
+    }
+    .back-link::before { content: '←'; margin-right: 0.1rem; }
+
+    @media (max-width: 640px) {
+      .doc-header-inner { flex-direction: column; align-items: flex-start; }
+      .doc-meta-right { gap: 1rem; }
+      .page-footer-inner { flex-direction: column; align-items: flex-start; }
+    }
+  </style>
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-EVS54RD7KM"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-EVS54RD7KM');
+</script>
+</head>
+
+<body>
+<div class="scanline"></div>
+
+<!-- ── DOCUMENT HEADER (doc metadata) ── -->
+<div class="doc-header">
+  <div class="doc-header-inner">
+    <div class="doc-id-block">
+      <div class="doc-logo">
+        <span class="dot"></span> EVO vHIL
+      </div>
+      <div class="doc-sep"></div>
+      
+    </div>
+    <div class="doc-meta-right">
+      
+      <div class="doc-meta-item">Status&nbsp;&nbsp;<span>DESIGN</span></div>
+      <div class="doc-meta-item">Rev&nbsp;&nbsp;<span>0.1-DRAFT</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── HERO ── -->
+<section class="hero">
+  <div class="container hero-content">
+
+    <div class="terminal-status">
+      <span class="led"></span>
+      SUBSYSTEM · DESIGN IN PROGRESS
+    </div>
+
+    <div class="hero-eyebrow">Subsystem Deep Dive · EVO vHIL Platform</div>
+
+    <h1 class="hero-title">
+      BMS Architecture<br>
+      <span class="cursor">Battery Management System</span>
+    </h1>
+
+    <p class="hero-subtitle">
+      The system responsible for energy control, safety enforcement,
+      and state orchestration within the EVO vHIL platform.
+    </p>
+    <p style="opacity:0.65; font-family:var(--mono); margin-top:1rem;">
+  PREVIEW · Full architecture release coming soon
+</p>
+    <div class="hero-stats">
+      <div class="stat">
+        <div class="stat-val">84S</div>
+        <div class="stat-label">HV Traction Pack</div>
+      </div>
+      <div class="stat">
+        <div class="stat-val">4S</div>
+        <div class="stat-label">LV Auxiliary Pack</div>
+      </div>
+      <div class="stat">
+        <div class="stat-val">M / S</div>
+        <div class="stat-label">Master · Slave</div>
+      </div>
+      <div class="stat">
+        <div class="stat-val">ASIL D</div>
+        <div class="stat-label">Target Integrity</div>
+      </div>
+    </div>
+
+  </div>
+  
+</section>
+
+<!-- ── SAFETY GOALS ── -->
+<section class="section">
+  <div class="container" style="max-width: 900px;">
+
+    <div class="section-header">
+      <div class="section-tag">ISO 26262 Part 3 — HARA Output</div>
+      <h2 class="section-title">Safety Goals</h2>
+      <p class="section-lead">
+        Top-level safety requirements derived from Hazard Analysis and Risk Assessment.
+        Each goal carries an ASIL integrity level and governs all downstream
+        technical safety concepts for this subsystem.
+      </p>
+    </div>
+
+    <div class="sg-grid">
+
+      <div class="sg-card reveal">
+        <div class="sg-card-header">
+          <span class="sg-id">SG-BMS-01</span>
+          
+        </div>
+        <div class="sg-title">Prevent uncontrolled HV energy release</div>
+        <div class="sg-desc">The BMS shall prevent hazardous voltage exposure to passengers and service personnel under all operating conditions, including contactor failure and isolation faults.</div>
+      </div>
+
+      <div class="sg-card reveal">
+        <div class="sg-card-header">
+          <span class="sg-id">SG-BMS-02</span>
+          
+        </div>
+        <div class="sg-title">Prevent thermal runaway propagation</div>
+        <div class="sg-desc">The BMS shall detect and respond to cell-level thermal anomalies before propagation across the pack, enforcing controlled shutdown within defined time bounds.</div>
+      </div>
+
+      <div class="sg-card reveal">
+        <div class="sg-card-header">
+          <span class="sg-id">SG-BMS-03</span>
+          
+        </div>
+        <div class="sg-title">Maintain 12V rail survivability</div>
+        <div class="sg-desc">The LV auxiliary pack shall sustain safety-critical low-voltage systems for a defined duration following complete HV pack loss or disconnection.</div>
+      </div>
+
+      <div class="sg-card reveal">
+        <div class="sg-card-header">
+          <span class="sg-id">SG-BMS-04</span>
+          
+        </div>
+        <div class="sg-title">Ensure safe state reachability</div>
+        <div class="sg-desc">Upon detection of any safety-relevant fault, the BMS shall transition to a defined safe state within the fault-tolerant time interval (FTTI) without driver action.</div>
+      </div>
+
+      <div class="sg-card reveal">
+        <div class="sg-card-header">
+          <span class="sg-id">SG-BMS-05</span>
+          
+        </div>
+        <div class="sg-title">Prevent overcharge and deep discharge</div>
+        <div class="sg-desc">Cell voltage and SoC boundaries shall be enforced in hardware and software. Charging and load contactor control shall be independently monitored for correctness.</div>
+      </div>
+
+      <div class="sg-card reveal">
+        <div class="sg-card-header">
+          <span class="sg-id">SG-BMS-06</span>
+          
+        </div>
+        <div class="sg-title">Correct state reporting to VCU</div>
+        <div class="sg-desc">SoC, SoH, fault status, and contactor state transmitted to the Vehicle Control Unit over CAN shall be accurate, timely, and detectable as erroneous when corrupted.</div>
+      </div>
+
+    </div>
+
+  </div>
+</section>
+
+<!-- ── ARCHITECTURE OVERVIEW ── -->
+<section class="section">
+  <div class="container" style="max-width: 760px;">
+
+    <div class="section-header">
+      <div class="section-tag">Architecture Overview</div>
+      <h2 class="section-title">This is being designed.</h2>
+      <p class="section-lead">
+        Full documentation is under active development.
+        The architecture below will be published in detail — with design rationale
+        traced directly to the safety goals above.
+      </p>
+    </div>
+
+    <div class="callout cyan">
+      <h4 style="margin-bottom: 0.65rem;">Topics will include</h4>
+      <ul class="topic-list">
+        <li>Master / Slave Architecture — distributed cell monitoring hierarchy</li>
+        <li>Dual-pack architecture — HV Traction (84S) + LV Auxiliary (4S)</li>
+        <li>12V rail survivability under catastrophic HV loss</li>
+        <li>Contactor sequencing and pre-charge state machine logic</li>
+        <li>Fault detection, isolation, and controlled shutdown</li>
+        <li>Passive and active cell balancing · energy flow design</li>
+      </ul>
+    </div>
+
+    <div class="sig-line">
+      Designed for systems where failure is not an option.
+    </div>
+
+    <div class="design-progress">
+      <div class="progress-label">
+        Documentation Completion
+        <span>In Progress — Rev 0.1</span>
+      </div>
+      <div class="progress-bar-wrap">
+        <div class="progress-bar-fill"></div>
+      </div>
+    </div>
+
+    <div class="layer-row">
+      <span class="badge badge-green">Battery Management System</span>
+      <span class="badge badge-cyan">EVO vHIL Platform</span>
+      
+      <span class="badge badge-amber">Architecture Phase</span>
+      <span style="background:rgba(96,112,128,0.1); border:1px solid rgba(96,112,128,0.25); color:var(--text-dim); font-family:var(--mono); font-size:0.68rem; letter-spacing:0.06em; padding:0.28rem 0.7rem; border-radius:100px; display:inline-flex; align-items:center;">ISO 26262 : 2018 - informed</span>
+    </div>
+
+  </div>
+</section>
+
+<!-- ── PLANNED WORK PRODUCTS ── -->
+<section class="section">
+  <div class="container" style="max-width: 900px;">
+
+    <div class="section-header">
+      <div class="section-tag">ISO 26262 Part 4 — Planned Work Products</div>
+      <h2 class="section-title" style="font-size: 1.5rem;">Planned documentation</h2>
+    </div>
+
+    <div class="card-grid">
+
+      <div class="card reveal">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.75rem;">
+          <span style="font-family:var(--mono); font-size:0.68rem; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.1em;">WP-01</span>
+          
+        </div>
+        <div class="card-title">HARA</div>
+        <div class="card-body">Hazard Analysis and Risk Assessment — hazardous events, severity, exposure, and controllability classifications across all operating modes.</div>
+      </div>
+
+      <div class="card reveal">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.75rem;">
+          <span style="font-family:var(--mono); font-size:0.68rem; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.1em;">WP-02</span>
+          
+        </div>
+        <div class="card-title">Functional Safety Concept</div>
+        <div class="card-body">FSC derived from safety goals — functional safety requirements, safe states, FTTI definition, and emergency operation strategy.</div>
+      </div>
+
+      <div class="card reveal">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.75rem;">
+          <span style="font-family:var(--mono); font-size:0.68rem; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.1em;">WP-03</span>
+          
+        </div>
+        <div class="card-title">Technical Safety Concept</div>
+        <div class="card-body">HW/SW allocation, diagnostic coverage targets, freedom from interference, and hardware architectural metrics — SPFM and LFM.</div>
+      </div>
+
+      <div class="card reveal">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.75rem;">
+          <span style="font-family:var(--mono); font-size:0.68rem; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.1em;">WP-04</span>
+          
+        </div>
+        <div class="card-title">State Machine Specification</div>
+        <div class="card-body">Formal contactor and BMS state machine — pre-charge, drive, charge, fault, and shutdown states with transition guards and timing constraints.</div>
+      </div>
+
+      <div class="card reveal">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.75rem;">
+          <span style="font-family:var(--mono); font-size:0.68rem; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.1em;">WP-05</span>
+          
+        </div>
+        <div class="card-title">Fault Detection Catalogue</div>
+        <div class="card-body">Per-fault entries: detection mechanism, diagnostic coverage class, reaction time, safe state trigger, and CAN fault code mapping to VCU.</div>
+      </div>
+
+      <div class="card reveal">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.75rem;">
+          <span style="font-family:var(--mono); font-size:0.68rem; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.1em;">WP-06</span>
+          
+        </div>
+        <div class="card-title">Balancing &amp; Energy Flow</div>
+        <div class="card-body">Passive and active balancing topology, SoC estimation strategy, energy throughput limits, and dual-pack coordination logic.</div>
+      </div>
+
+    </div>
+
+    <div class="callout" style="margin-top: 2.5rem;">
+      <h4 style="margin-bottom: 0.4rem;">This is where system-level behavior meets real-world constraints.</h4>
+      <p>Every design decision in this subsystem is bounded by physics, chemistry, and the hard timing guarantees required by ISO 26262 for ASIL D systems. Documentation will expose not just <em>what</em> the system does — but <em>why</em> each constraint exists.</p>
+    </div>
+
+  </div>
+</section>
+
+
+<!-- ── MINIMAL FOOTER — no nav links ── -->
+<div class="page-footer">
+  <div class="page-footer-inner">
+    <div>
+      <div class="footer-brand">EVO vHIL · BMS</div>
+      <div class="footer-meta">EVO-BMS · Rev 0.1</div>
+    </div>
+    <!-- <a href="https://evovhil.com/" class="back-link">Back to EVO vHIL</a> -->
+    <div style="margin-top:2rem; opacity:0.8; font-family:var(--mono); font-size:0.8rem;">
+  Follow updates → <a href="https://evovhil.com" style="color:var(--cyan)">EVO vHIL</a>
+</div>
+  </div>
+</div>
+
+<script>
+const reveals = document.querySelectorAll('.reveal');
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
+}, { threshold: 0.1 });
+reveals.forEach(el => observer.observe(el));
+</script>
+
+</body>
+</html>
