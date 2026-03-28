@@ -95,7 +95,7 @@ In this architecture:
 
 ## Software-Defined Validation
 
-This system is developed and validated using a full virtual Hardware-in-the-Loop **(vHIL)** environment.
+This system is developed and validated using a full virtual Hardware-in-the-Loop **(EVO vHIL)(https://evovhil.com)** environment.
 
 - Embedded BMS firmware runs on simulated hardware
 - Control logic executes in a real-time RTOS environment
